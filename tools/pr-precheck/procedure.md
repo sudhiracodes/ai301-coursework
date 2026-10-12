@@ -10,7 +10,7 @@ Execute the reading steps in the following strict chronological order before eva
 
 1. **Read Repository Context and Policies**:
    - In eval mode, read the `Repo facts` block to extract repository-specific constraints, required PR template sections/checklists, contribution guidelines, and mandatory AI-use disclosure requirements.
-   - In live mode, read `scope.md` to confirm the PR targets the scoped repository (`codepath/pathreview-ai301-fa26-s1`) and review `voice-guide.md`.
+   - In live mode, read `scope.md` to confirm the PR targets the repository specified on its `Repo:` line (the single source of truth for repository scope) and review `voice-guide.md`.
 2. **Read the Candidate Plan and Deviation Notes**:
    - Read the plan's stated scope, boundary, and in-scope vs. out-of-scope declarations (`plan.md` in live mode or the `Plan context` block in eval mode).
    - Note any explicit deviation notes or deferred scope recorded by the author.
@@ -40,7 +40,7 @@ Gather factual evidence for each rubric check using the mappings in `references/
    - Pair the executed test commands and outputs against the plan's test plan and the original failure reproduction.
    - Record whether the failing path was re-run with observable before-and-after proof, or whether only an unaffected control path / vague qualitative statement was provided.
 3. **Gather Diff Quality Evidence**:
-   - Inspect all diff hunks for debugging statements (e.g. `eprintln!`, `console.log`, temporary prints), dead/unused functions, commented-out obsolete code, duplicate lines, or formatting/import churn.
+   - Inspect all diff hunks for debugging statements (e.g., temporary prints or logging in execution loops), dead/unused functions, commented-out obsolete code, duplicate lines, or formatting/import churn.
    - Record any offending hunks or confirm the diff is clean.
 4. **Gather Standards and Comms Evidence**:
    - Compare the candidate PR description and title against the repository's PR template and policies from Step 1.

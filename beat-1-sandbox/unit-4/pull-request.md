@@ -15,7 +15,7 @@ label is not graded.
 
 **Pull request**
 
-https://github.com/codepath/pathreview-ai301-fa26-s1/pull/118
+https://github.com/codepath/pathreview-ai301-fa26-s1/pull/155
 
 **Branch**
 
@@ -40,9 +40,9 @@ Package `pkg-03` (`starship/starship#7648`):
 **Check rationale**
 
 Quoted check from `rubric.md`:
-`| `plan-fidelity` | Candidate diff's modified files and implementation changes compared side-by-side against the candidate plan's scope, boundary, and deviation notes, read alongside the PR description's claims | Every modified file and functional change in the diff falls within the plan's stated scope or is accounted for in an explicit deviation note, and the PR description accurately represents the diff without claiming unexecuted changes (e.g., claiming documentation updates that are missing in the diff) or silently introducing unrequested features, configuration options, broad function rewrites, or untouched file modifications. *(Rationale: Silent scope drift or false fidelity claims mislead maintainers and introduce unreviewed functional surface area.)* | required |`
+`| `plan-fidelity` | Candidate diff's modified files and implementation changes compared side-by-side against the candidate plan's scope, boundary, and deviation notes, read alongside the PR description's claims | Every modified file and functional change in the diff falls within the plan's stated scope or is accounted for in an explicit deviation note. The diff does not introduce unannounced configuration options, flags, or settings (e.g., adding unrequested CLI flags or config fields), unrequested helper rewrites, or modifications to untouched files, and the description does not claim fidelity that the diff contradicts (e.g., claiming documentation updates that the diff omitted). *(Rationale: Unannounced scope drift and false fidelity claims mislead reviewers and expand the codebase's unreviewed surface area.)* | required |`
 
-Reasoning: In pull request reviews, silent drift occurs in two distinct directions: adding unannounced scope beyond what was approved in planning (such as `pkg-03` adding a new config option and rewriting `truncate()`, `pkg-06` bundling theme settings and renaming passes, or `pkg-09` adding an unannounced `--time-format` flag), or claiming more in the PR description than the diff actually delivers (such as `pkg-17` claiming documentation updates that are missing from the diff). The check was specifically designed to require side-by-side pairing between the diff and the plan, and between the diff and the description claims, catching both unannounced additions and unfulfilled claims while explicitly permitting documented deviations.
+Reasoning: In pull request reviews, silent drift occurs in two distinct directions: adding unannounced scope beyond what was approved in planning (such as adding unrequested configuration options, settings, or broad helper function rewrites), or claiming more in the PR description than the diff actually delivers (such as claiming documentation updates that are missing from the diff). The check was authored with general criteria that evaluate behavior rather than fixture data, requiring side-by-side pairing between the diff and the plan, and between the diff and the description claims, catching both unannounced additions and unfulfilled claims while explicitly permitting documented deviations.
 
 **Trade-offs**
 

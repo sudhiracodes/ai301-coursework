@@ -2,7 +2,7 @@
 
 ## Diagnosis
 
-When `verify_password` in `core/security.py` is invoked with a malformed or unrecognized password hash string (such as non-bcrypt legacy strings or corrupted entries in the database), `pwd_context.verify(plain_password, hashed_password)` delegates to `passlib.context.CryptContext._identify_record`. Because the hash does not match any registered hash scheme in `CryptContext(schemes=["bcrypt"], deprecated="auto")`, passlib raises an unhandled `passlib.exc.UnknownHashError: hash could not be identified` (or `ValueError`).
+When `verify_password` in `core/security.py` is invoked with a malformed or unrecognized password hash string (such as non-bcrypt legacy strings or corrupted entries in the database), `pwd_context.verify(plain_password, hashed_password)` delegates to `passlib.context.CryptContext._identify_record`. Because the hash does not match any registered hash scheme in `CryptContext(schemes=["bcrypt"], deprecated="auto")`, passlib raises an unhandled `passlib.exc.UnknownHashError: hash could not be identified`.
 
 As verified in the Unit 2 reproduction evidence:
 ```
@@ -20,7 +20,7 @@ This uncaught exception causes authentication endpoints to fail with a 500 Inter
 ## Scope
 
 ### In Scope
-- Modify `verify_password` in `core/security.py` to catch `passlib.exc.UnknownHashError` and `ValueError` during hash verification.
+- Modify `verify_password` in `core/security.py` to catch `passlib.exc.UnknownHashError` during hash verification.
 - Return `False` when an unrecognized or malformed hash format is encountered, failing closed securely.
 - Ensure all unit tests in `tests/unit/test_security.py` execute and pass.
 
@@ -31,7 +31,7 @@ This uncaught exception causes authentication endpoints to fail with a 500 Inter
 
 ## Files Touched
 
-- `core/security.py`: Add `UnknownHashError` import from `passlib.exc` and wrap `pwd_context.verify` inside `verify_password` in a `try...except (UnknownHashError, ValueError): return False` block.
+- `core/security.py`: Add `UnknownHashError` import from `passlib.exc` and wrap `pwd_context.verify` inside `verify_password` in a `try...except UnknownHashError: return False` block.
 
 ## Approach
 
@@ -50,7 +50,7 @@ This uncaught exception causes authentication endpoints to fail with a 500 Inter
        """
        try:
            return bool(pwd_context.verify(plain_password, hashed_password))
-       except (UnknownHashError, ValueError):
+       except UnknownHashError:
            return False
    ```
 3. Run the unit test suite via `pytest tests/unit/test_security.py` to verify that `test_verify_with_wrong_hash_format` passes alongside all 24 other security tests.
@@ -80,11 +80,11 @@ assert verify_password("", "invalid_hash") is False
 
 ## Risks and Unknowns
 
-- **Risk**: Catching overly broad exceptions (such as base `Exception`) could conceal unrelated programming errors.
-  - *Mitigation*: Strictly catch `(UnknownHashError, ValueError)` which are the documented exception types raised by `passlib` on malformed hash inputs.
+- **Risk**: Catching overly broad exceptions could conceal unrelated runtime errors.
+  - *Analysis & Mitigation*: Checking passlib's exception hierarchy reveals that `UnknownHashError` inherits directly from `ValueError` (`issubclass(UnknownHashError, ValueError) == True`). Catching generic `ValueError` would be unnecessarily wide and could mask unrelated parameter or encoding errors. Therefore, we catch specifically `UnknownHashError`, which precisely targets the hash identification failure mode without swallowing general `ValueError`s.
 - **Risk**: Potential timing side-channels if invalid hashes return faster than bcrypt comparisons.
   - *Assessment*: Standard practice in passlib and Web APIs when a stored hash is invalid is to fail closed immediately.
 
 ## Deviations
 
-Nothing changed; the plan held. The implementation in `core/security.py` wrapped `pwd_context.verify` in `try ... except (UnknownHashError, ValueError): return False` exactly as planned, and all 25 unit tests in `tests/unit/test_security.py` passed with exit code 0.
+Nothing changed; the plan held. The implementation in `core/security.py` wrapped `pwd_context.verify` in `try ... except UnknownHashError: return False` exactly as planned, and all 25 unit tests in `tests/unit/test_security.py` passed with exit code 0.

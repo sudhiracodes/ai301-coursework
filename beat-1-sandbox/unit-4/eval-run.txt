@@ -1,11 +1,11 @@
-# eval run written by run_eval.py at 2026-10-12T01:25:00Z
+# eval run written by run_eval.py at 2026-10-12T02:50:00Z
 # model: sonnet (pinned)
 # graded: tools/pr-precheck
 # packages: 20 scored
 #   SKILL.md  sha256:16e8d40e08da1d8b
-#   rubric.md  sha256:19072d22e83ac756
-#   procedure.md  sha256:a9a8a5dc9629ec4f
-#   evidence-guide.md  sha256:e3267b8ca70dbf8d
+#   rubric.md  sha256:099b036799ed52f9
+#   procedure.md  sha256:71697cf2f57db495
+#   evidence-guide.md  sha256:551ba88f4cde663a
 #
 grading 20 package(s) with the tool at tools/pr-precheck, model sonnet, 5 worker(s)...
   pkg-01: reject
