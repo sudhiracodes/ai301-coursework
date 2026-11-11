@@ -66,10 +66,9 @@ I created a CLAUDE.local.md memory file in the repository root configuring the P
 
 I implemented four comprehensive unit tests in `tests/test_api.py` covering the happy path, corrupted file uploads, oversized payloads, and temporary file lifecycle management for `POST /change-detect`. During initial test execution, the threshold assertion failed because FastAPI interprets unannotated primitive arguments alongside file uploads as query parameters rather than form data; calibrating the test request to pass parameters via query string resolved the discrepancy and brought all 20 tests in `test_api.py` and all 35 tests in the repo suite to green. I opened PR #54 against upstream with detailed before-and-after test execution evidence.
 
-**Unit 8: [one line on the tool work]**
+**Unit 8: PR monitoring, communication playbook, and status tracking**
 
-[2-4 sentences: the PR-monitor and your playbook. What it read, what it
-drafted, what you did with the draft.]
+I created a custom PR communication playbook in `~/.claude/pr-monitor/playbook.md` defining response protocols, a 5-day staleness threshold derived from historical repository merge activity, and walk-away criteria. While PR #54 is currently awaiting initial maintainer review with passing security checks, the playbook establishes deterministic guidance for addressing feedback without defensive friction. No nudge is drafted yet as the PR was opened today and is well within normal maintainer response windows.
 
 ---
 
