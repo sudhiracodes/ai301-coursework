@@ -11,7 +11,7 @@ files and no evidence uploads are part of Assignment 5.
 **Student:** Sudhira Ramesh
 **GitHub Username:** sudhiracodes
 **Issue:** https://github.com/iamvisheshsrivastava/geospatial/issues/39
-**Pull Request:** [GitHub PR link, once opened]
+**Pull Request:** https://github.com/iamvisheshsrivastava/geospatial/pull/54
 
 One repository, built across units 5 to 8, telling the whole story of your real
 contribution. Fill it as you work, not at the end — the sections below ask for evidence that
@@ -62,10 +62,9 @@ I upgraded the unit-1 issue-select skill into issue-scout by implementing a live
 
 I created a CLAUDE.local.md memory file in the repository root configuring the Python 3.11 virtual environment and exact pytest commands so tool agents don't have to discover project context repeatedly. During setup, testing pip commands initially failed because the uv-generated virtual environment lacked pip by default; I resolved this by utilizing uv pip to manage dependency synchronization in under a second. I integrated the voice guard conventions to enforce polite, structured communication before posting my formal claim on issue #39 with concrete reproduction findings and an actionable testing plan.
 
-**Unit 7: [one line on the tool work]**
+**Unit 7: Test implementation, query parameter calibration, and pull request delivery**
 
-[2-4 sentences: the ship-gate and your gate manifest. What it produced
-on your real branch, what fought you, what changed because of it.]
+I implemented four comprehensive unit tests in `tests/test_api.py` covering the happy path, corrupted file uploads, oversized payloads, and temporary file lifecycle management for `POST /change-detect`. During initial test execution, the threshold assertion failed because FastAPI interprets unannotated primitive arguments alongside file uploads as query parameters rather than form data; calibrating the test request to pass parameters via query string resolved the discrepancy and brought all 20 tests in `test_api.py` and all 35 tests in the repo suite to green. I opened PR #54 against upstream with detailed before-and-after test execution evidence.
 
 **Unit 8: [one line on the tool work]**
 
@@ -168,93 +167,126 @@ Searching `tests/test_api.py` for `change-detect` or `change_detect` returns zer
 
 **Analysis**
 
-[Your analysis of the root cause: what is causing the issue, traced
-to the files and functions involved.]
+The root cause of missing test coverage is historical omission: `src/api/main.py:749` exposes `change_detect` accepting `before: UploadFile`, `after: UploadFile`, and `threshold: float = _DEFAULT_CHANGE_THRESHOLD`, but `tests/test_api.py` only covered the older `/predict`, `/anomaly`, and async batch endpoints. The endpoint relies on `src.change_detection.detect_change` which executes deep-feature extraction with a ResNet-50 backbone. Because real inference requires PyTorch weights and image preprocessing, testing this endpoint requires mocking `detect_change` while testing the real FastAPI request processing, parameter parsing, error handlers, and file unlink cleanup in the `finally` block.
 
 **Proposed Solution**
 
-[High-level description of your fix approach, and what you are
-deliberately NOT changing.]
+Add targeted unit tests directly in `tests/test_api.py` without modifying application production code:
+1. Use `monkeypatch.setattr("src.change_detection.detect_change", ...)` to provide a deterministic mock dictionary without downloading or executing real ResNet weights.
+2. Use the existing `_png_bytes()` helper to generate valid image file payloads for multipart upload simulation via `TestClient`.
+3. Test negative cases (corrupted non-image bytes returning 400, oversized uploads returning 413).
+4. Wrap `main._save_upload` with a spy function to verify that all temporary disk paths created during execution are cleanly unlinked even when inference fails.
+5. Intentionally NOT modify `src/api/main.py` or any ML inference pipelines, preserving existing endpoint behavior and contracts.
 
 **Implementation Plan**
 
-1. [Modify file X to do Y]
-2. [Add or change Z]
-3. [Update tests]
+1. Create feature branch `fix/39-change-detect-tests` off `main`.
+2. Implement `test_change_detect_happy_path` verifying HTTP 200 and schema consistency with custom and default thresholds.
+3. Implement `test_change_detect_rejects_corrupted_upload` for invalid byte payloads on both before and after files.
+4. Implement `test_change_detect_rejects_oversized_upload` verifying HTTP 413 when files exceed configured maximums.
+5. Implement `test_change_detect_cleans_up_temp_files` tracking file descriptors to prove zero leaked temporary files.
+6. Run `PYTHONPATH=. .venv/bin/pytest tests/test_api.py -v` and `PYTHONPATH=. .venv/bin/pytest -q`.
 
-[Record deviations here as they happen: what changed mid-build and
-why. A recorded deviation is honest work; silent drift is not.]
+Deviations: During step 2, initial assertions assumed `threshold` was transmitted via form-data body; debugging the endpoint revealed FastAPI treats primitive scalar arguments as query parameters when accompanied by `UploadFile`s. Updated the test to use `params={"threshold": "0.5"}`.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: plan-check and code analysis
+- What it produced: Mapped endpoint failure modes and designed a 4-test suite asserting status codes, payload shapes, and temporary file disposal.
+- Difficulties: none met
+- What changed: Calibrated the plan to explicitly test both explicit query parameter thresholds and default threshold fallback.
 
 ---
 
 ## Testing Strategy
 
-[What observable checks prove the fix: your reproduction steps re-run
-against the built change (before and after), and the repo's own test
-suite or checks with the outcome shown. "Tests pass" with nothing
-observable named is not a strategy.]
+The testing strategy validates the endpoint through four observable and reproducible checks in `tests/test_api.py` run via `pytest`:
+1. **Happy path & schema validation**: Submitting two valid PNG images with a query threshold produces HTTP 200 and a response containing `change_score`, `is_changed`, `threshold`, and `change_map`. Submitting without a threshold parameter correctly applies the default threshold of `0.15`.
+2. **Corrupted payload isolation**: Uploading non-image string bytes (`b"not an image"`) for either the `before` or `after` image triggers the endpoint's exception handler and returns a clean HTTP 400 error (`"Change detection failed..."`), never an unhandled 500.
+3. **Payload size gating**: Uploading a file exceeding `settings.max_upload_mb` triggers `_read_upload_capped` and raises HTTP 413.
+4. **Temporary file cleanup**: Spying on `main._save_upload` and injecting a simulated runtime failure in `detect_change` proves that all generated temporary files on disk are unlinked in the `finally` block.
+
+**Execution Before Fix:**
+```text
+$ grep -i "change[-_]detect" tests/test_api.py
+(no matches)
+$ PYTHONPATH=. .venv/bin/pytest tests/test_api.py -v
+======================== 16 passed, 1 warning in 34.83s ========================
+```
+
+**Execution After Fix:**
+```text
+$ PYTHONPATH=. .venv/bin/pytest tests/test_api.py -v -k "change_detect"
+tests/test_api.py::test_change_detect_happy_path PASSED                  [ 25%]
+tests/test_api.py::test_change_detect_rejects_corrupted_upload PASSED    [ 50%]
+tests/test_api.py::test_change_detect_rejects_oversized_upload PASSED    [ 75%]
+tests/test_api.py::test_change_detect_cleans_up_temp_files PASSED        [100%]
+================= 4 passed, 16 deselected, 1 warning in 2.12s ==================
+
+$ PYTHONPATH=. .venv/bin/pytest tests/test_api.py -v
+======================== 20 passed, 1 warning in 2.30s =========================
+
+$ PYTHONPATH=. .venv/bin/pytest -q
+35 passed, 4 warnings in 2.69s
+```
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: pytest test runner with TestClient
+- What it produced: 4 new passing tests, bringing `test_api.py` coverage from 16 to 20 tests and the full suite to 35 passing tests.
+- Difficulties: none met
+- What changed: nothing
 
 ---
 
 ## Implementation Notes
 
-[A running log, added to as you work. Date each entry. What you
-built, decisions you made when you made them, wrong turns included.]
+**2026-11-10**
 
-**[Date]**
-
-[Entry]
-
-**[Date]**
-
-[Entry]
+- Set up isolated Python 3.11 virtual environment using `uv` and verified initial baseline test pass rate (16/16 in `test_api.py`).
+- Posted claim comment on GitHub issue #39 with proposed test approach.
+- Created `fix/39-change-detect-tests` branch in local clone.
+- Authored initial draft of `test_change_detect_happy_path`. The first test run failed with `AssertionError: assert 0.15 == 0.5`. Diagnosed that `threshold: float = _DEFAULT_CHANGE_THRESHOLD` on line 753 is parsed by FastAPI as a query parameter rather than form-data field when multipart files are present.
+- Updated the test invocation to pass `params={"threshold": "0.5"}` and added a secondary assertion verifying the default `0.15` threshold when omitted.
+- Implemented `test_change_detect_rejects_corrupted_upload`, testing both `before` and `after` corruption paths to assert HTTP 400.
+- Implemented `test_change_detect_rejects_oversized_upload` to assert HTTP 413.
+- Implemented `test_change_detect_cleans_up_temp_files` with a spy on `_save_upload` and forced exception to confirm 100% temporary file cleanup in the `finally` block.
+- Pushed branch `fix/39-change-detect-tests` to `sudhiracodes/geospatial` and opened Pull Request #54 against `iamvisheshsrivastava/geospatial:main`.
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: git, gh CLI, and Python interactive test execution
+- What it produced: Branch, 112 lines of test additions across 4 test functions, clean commits, and PR #54.
+- Difficulties: Catching the query parameter versus form-data parameter binding in FastAPI.
+- What changed: Adjusted test client request invocation to use `params` for scalar primitive values.
 
 ---
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when opened]
+**PR Link:** https://github.com/iamvisheshsrivastava/geospatial/pull/54
 
-**PR Description:** [what the PR says; much of the content above
-adapts into it]
+**PR Description:**
+
+Closes #39. Adds unit test coverage for `POST /change-detect` in `tests/test_api.py`:
+- `test_change_detect_happy_path`: verifies 200 response, payload schema (`change_score`, `is_changed`, `threshold`, `change_map`), and threshold parameter handling.
+- `test_change_detect_rejects_corrupted_upload`: asserts clean HTTP 400 when invalid non-image bytes are supplied.
+- `test_change_detect_rejects_oversized_upload`: asserts HTTP 413 for uploads exceeding `max_upload_mb`.
+- `test_change_detect_cleans_up_temp_files`: proves all temporary upload files are deleted in the `finally` block even when inference raises an exception.
+Includes before/after test run evidence (16 -> 20 tests in `test_api.py`, 35 passed overall) and AI usage disclosure.
 
 **Maintainer Feedback:**
 
-- [Date]: [feedback received, or "none yet"; silence is a normal
-  state and costs you nothing]
-- [Date]: [how you addressed it]
+- 2026-11-10: none yet (PR opened today; awaiting maintainer review)
 
-**Status:** [Awaiting review / Iterating / Merged / Closed. The
-status is a fact you record, never a grade: the PR is graded as
-opened.]
+**Status:** Awaiting review
 
 **Toolkit**
 
-- Tool:
-- What it produced:
-- Difficulties:
-- What changed:
+- Tool: gh pr create
+- What it produced: Pull Request #54 on iamvisheshsrivastava/geospatial
+- Difficulties: none met
+- What changed: nothing
 
 ---
 
@@ -262,25 +294,25 @@ opened.]
 
 **Technical Skills Gained**
 
-[What you learned technically, named concretely.]
+- Writing isolated API unit tests using FastAPI's `TestClient` for multipart file uploads and form handling.
+- Employing pytest's `monkeypatch` to mock ML inference functions (`detect_change`) and verify endpoint integration without needing model checkpoint files or GPU hardware.
+- Understanding FastAPI's parameter resolution semantics: primitive arguments defined alongside `UploadFile` are bound as query parameters unless explicitly declared with `Form(...)`.
+- Testing resource leak prevention and file descriptor lifecycle by simulating exceptions and verifying cleanup in `finally` blocks.
 
 **Challenges Overcome**
 
-[What was hard and how you solved it; point at the real events, the
-Toolkit blocks above are full of them.]
+- Diagnosing the query parameter binding discrepancy: The initial happy-path test failed with `AssertionError: assert 0.15 == 0.5` when passing `threshold` as form data. Inspecting the function signature revealed it was parsed as a query parameter, which I resolved by supplying `params={"threshold": "0.5"}` and adding a secondary assertion for default threshold fallback.
+- Standing up a clean local Python 3.11 environment with 93 dependencies (including PyTorch, torchvision, and rasterio) using `uv` to ensure test isolation.
 
 **What I'd Do Differently Next Time**
 
-[Reflection on your process.]
+- Check the endpoint's OpenAPI schema (`/docs` or `app.openapi()`) prior to drafting test requests to immediately verify whether parameters belong in query strings, form fields, or headers.
+- Include a live claim-check probe directly in the initial scout scanning pipeline to avoid manually evaluating issues that were claimed upstream during the gap between scan date and contribution work.
 
 ---
 
 ## Resources Used
 
-[What actually helped, not a reading list. List things this story
-already shows you using: the doc you followed to set the environment
-up, the thread that explained the bug, the person who answered you.
-One real entry beats ten plausible ones.]
-
-- [Link to documentation that helped]
-- [Discussion, issue, or post that helped]
+- FastAPI TestClient and Request Files documentation: https://fastapi.tiangolo.com/tutorial/request-files/
+- GitHub Issue #39 thread: https://github.com/iamvisheshsrivastava/geospatial/issues/39
+- Pytest Monkeypatch Fixture documentation: https://docs.pytest.org/en/stable/how-to/monkeypatch.html
